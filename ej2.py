@@ -140,3 +140,26 @@ for Fila in range(1, 21):
 
 if len(Recortes) > 0:
     cv2.imwrite("alumnos_no_aprobados.png", np.vstack(Recortes))
+
+for id_planilla in range(1, 5):
+    nombre_archivo = f"grade_sheet_{id_planilla}.png"
+    img_actual = cv2.imread(nombre_archivo, cv2.IMREAD_GRAYSCALE)
+    if img_actual is None:
+        continue
+    res= ValidarPlanilla(img_actual)
+    GuardarCSV(res, f"resultados_{nombre_archivo[:-4]}.csv")
+    f_grilla, c_grilla = ObtenerGrilla(img_actual, 200)
+    casilleros_actual = ObtenerCasilleros(f_grilla, c_grilla)
+    recortes_no_aprobados = []
+    for fila in range(1, 21):
+        if all(res[fila - 1]):
+            cond = ClasificarCondicion(img_actual, casilleros_actual[6][fila])
+            if cond in ("L", "R"):
+                der, izq, sup, inf = casilleros_actual[2][fila]
+                rec = cv2.cvtColor(img_actual[izq:der, sup:inf], cv2.COLOR_GRAY2BGR)
+                color = (0, 0, 255) if cond == "L" else (255, 0, 0)
+                rec = cv2.copyMakeBorder(rec, 4, 4, 4, 4, cv2.BORDER_CONSTANT, value=color)
+                recortes_no_aprobados.append(rec)
+
+    if len(recortes_no_aprobados) > 0:
+        cv2.imwrite(f"alumnos_no_aprobados_{id_planilla}.png", np.vstack(recortes_no_aprobados))
