@@ -33,6 +33,7 @@ def ObtenerGrilla(Imagen: np.ndarray, Umbral: int) -> Tuple[np.ndarray, np.ndarr
 
 def ObtenerCasilleros(IdFilas: np.ndarray, IdColumnas: np.ndarray) -> List[List[Tuple[int,int,int,int]]]:
     """
+    Devuelve los casilleros de la grilla a partir de los indices de filas y columnas.
     """
     CasillerosColumna = []
     for I in range(1, len(IdColumnas) - 1, 2):
@@ -102,4 +103,40 @@ def ValidarPlanilla(Imagen: np.ndarray) -> List[List[bool]]:
     return Resultados
 
 Imagen = cv2.imread("grade_sheet_3.png", cv2.IMREAD_GRAYSCALE)
-Resultados = ValidarPlanilla(Imagen) 
+def GuardarCSV(Resultados: List[List[bool]], Ruta: str) -> None:
+    import csv
+    with open(Ruta, "w", newline="", encoding="utf-8-sig") as Archivo:
+        Escritor = csv.writer(Archivo)
+        Escritor.writerow(["ID"] + Campos)
+        for Id, ResultadoFila in enumerate(Resultados, start=1):
+            Escritor.writerow([Id] + ["OK" if Valido else "MAL" for Valido in ResultadoFila])
+
+Resultados = ValidarPlanilla(Imagen)
+GuardarCSV(Resultados, "resultados.csv")
+
+def ClasificarCondicion(Imagen: np.ndarray, Casillero: Tuple[int,int,int,int]) -> str:
+    Caracteres = CaracteresCasillero(Imagen, Casillero)
+    Area = Caracteres[0][cv2.CC_STAT_AREA]
+    Ancho = Caracteres[0][cv2.CC_STAT_WIDTH]
+    Alto = Caracteres[0][cv2.CC_STAT_HEIGHT]
+    if Area / (Ancho * Alto) >= 0.40:
+        return "R"
+    if Ancho / Alto >= 0.8:
+        return "A"
+    return "L"
+
+Filas, Columnas = ObtenerGrilla(Imagen, 200)
+Casilleros = ObtenerCasilleros(Filas, Columnas)
+Recortes = []
+for Fila in range(1, 21):
+    if all(Resultados[Fila - 1]):
+        Condicion = ClasificarCondicion(Imagen, Casilleros[6][Fila])
+        if Condicion in ("L", "R"):
+            der, izq, sup, inf = Casilleros[2][Fila]
+            Recorte = cv2.cvtColor(Imagen[izq:der, sup:inf], cv2.COLOR_GRAY2BGR)
+            Color = (0, 0, 255) if Condicion == "L" else (255, 0, 0)
+            Recorte = cv2.copyMakeBorder(Recorte, 4, 4, 4, 4, cv2.BORDER_CONSTANT, value=Color)
+            Recortes.append(Recorte)
+
+if len(Recortes) > 0:
+    cv2.imwrite("alumnos_no_aprobados.png", np.vstack(Recortes))
