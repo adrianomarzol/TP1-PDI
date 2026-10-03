@@ -3,8 +3,6 @@ import numpy as np
 import cv2
 from typing import *
 
-Imagen = cv2.imread("grade_sheet_1.png", cv2.IMREAD_GRAYSCALE)
-
 def ObtenerGrilla(Imagen: np.ndarray, Umbral: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Detecta las filas y columnas de la grilla de una imagen.
@@ -52,51 +50,56 @@ def ObtenerCasilleros(IdFilas: np.ndarray, IdColumnas: np.ndarray) -> List[List[
 
     return CasillerosColumna
 
-def ContarCaracteresPalabras(Casillero):
-    return 0
-    
+def ObtenerCaracteres(Casillero: np.ndarray, UmbralArea: int = 2) -> np.ndarray:
+    ImagenUmbral = (Casillero < 130).astype(np.uint8)
+    _, _, Stats, _ = cv2.connectedComponentsWithStats(ImagenUmbral, connectivity = 8)
+    Stats = Stats[1:]
+    Stats = Stats[Stats[:, cv2.CC_STAT_AREA] > UmbralArea]
+    Stats = Stats[Stats[:, cv2.CC_STAT_WIDTH] < 0.5 * Casillero.shape[1]]
+    return Stats[np.argsort(Stats[:, cv2.CC_STAT_LEFT])]
 
-F, C = ObtenerGrilla(Imagen, 200)
+def ContarPalabras(Caracteres: np.ndarray, UmbralEspacio: int = 6) -> int:
+    if len(Caracteres) == 0:
+        return 0
+    Izquierdas = Caracteres[:, cv2.CC_STAT_LEFT]
+    Derechas = Izquierdas + Caracteres[:, cv2.CC_STAT_WIDTH]
+    Huecos = Izquierdas[1:] - Derechas[:-1]
+    return int(np.sum(Huecos > UmbralEspacio)) + 1
 
-Casilleros = ObtenerCasilleros(F, C)
+def ValidarNombre(Caracteres: np.ndarray) -> bool:
+    return ContarPalabras(Caracteres) >= 2 and len(Caracteres) <= 12
 
-der, izq, sup, inf = Casilleros[2][1]
+def ValidarLegajo(Caracteres: np.ndarray) -> bool:
+    return len(Caracteres) == 8 and ContarPalabras(Caracteres) == 1
 
-plt.plot(C)
-plt.show()
+def ValidarNota(Caracteres: np.ndarray) -> bool:
+    return len(Caracteres) in (1, 2) and ContarPalabras(Caracteres) == 1
 
-Casilleros[0]
-Casillero = Imagen[izq:der, sup:inf]
+def ValidarCondicion(Caracteres: np.ndarray) -> bool:
+    return len(Caracteres) == 1
 
-ImagenUmbral = (Casillero < 180).astype(np.uint8)
+def CaracteresCasillero(Imagen: np.ndarray, Casillero: Tuple[int,int,int,int]) -> np.ndarray:
+    der, izq, sup, inf = Casillero
+    return ObtenerCaracteres(Imagen[izq:der, sup:inf])
 
-plt.imshow(ImagenUmbral, cmap = 'gray')
-plt.show()
+Validadores = [ValidarLegajo, ValidarNombre, ValidarNota, ValidarNota, ValidarNota, ValidarCondicion]
+Campos = ["Legajo", "Nombre y apellido", "Parcial 1", "Parcial 2", "Parcial 3", "Condición Final"]
 
-nl, l, stats, centroids = cv2.connectedComponentsWithStats(ImagenUmbral, connectivity = 8)
+def ValidarPlanilla(Imagen: np.ndarray) -> List[List[bool]]:
+    Filas, Columnas = ObtenerGrilla(Imagen, 200)
+    Casilleros = ObtenerCasilleros(Filas, Columnas)
+    Resultados = []
+    for Fila in range(1, 21):
+        ResultadoFila = []
+        print(f"> Registro {Fila}:")
+        for Columna in range(1, 7):
+            Caracteres = CaracteresCasillero(Imagen, Casilleros[Columna][Fila])
+            EsValido = Validadores[Columna - 1](Caracteres)
+            ResultadoFila.append(EsValido)
+            print(f"> {Campos[Columna - 1]}: {'OK' if EsValido else 'MAL'}")
+        print(">")
+        Resultados.append(ResultadoFila)
+    return Resultados
 
-ix_area = stats[:, -1] > 50
-stats = stats[ix_area, :] 
-
-for i in range(1, nl):
-    # Extraer estadísticas de la componente actual
-    x = stats[i, cv2.CC_STAT_LEFT]
-    y = stats[i, cv2.CC_STAT_TOP]
-    w = stats[i, cv2.CC_STAT_WIDTH]
-    h = stats[i, cv2.CC_STAT_HEIGHT]
-    area = stats[i, cv2.CC_STAT_AREA]
-    
-    # Extraer las coordenadas del centroide
-    cx, cy = centroids[i]
-    
-    # Opcional: Filtrar por área para ignorar ruido (ej. ignorar cosas de menos de 20 píxeles)
-    if area > 100:
-        # Dibujar el rectángulo verde alrededor del objeto (espesor de 2 píxeles)
-        cv2.rectangle(ImagenUmbral, (x, y), (x + w, y + h), 2)
-        
-        # Dibujar un círculo rojo en el centroide (radio 3, relleno)
-        #cv2.circle(ImagenUmbral[izq:der, sup:inf], (int(cx), int(cy)), 3, (0, 0, 255), -1)
-
-# 5. Mostrar el resultado en una ventana
-plt.imshow(ImagenUmbral, cmap = 'gray')
-plt.show()
+Imagen = cv2.imread("grade_sheet_3.png", cv2.IMREAD_GRAYSCALE)
+Resultados = ValidarPlanilla(Imagen) 
