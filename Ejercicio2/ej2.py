@@ -112,7 +112,6 @@ def GuardarCSV(Resultados: List[List[bool]], Ruta: str) -> None:
             Escritor.writerow([Id] + ["OK" if Valido else "MAL" for Valido in ResultadoFila])
 
 Resultados = ValidarPlanilla(Imagen)
-GuardarCSV(Resultados, "resultados.csv")
 
 def ClasificarCondicion(Imagen: np.ndarray, Casillero: Tuple[int,int,int,int]) -> str:
     Caracteres = CaracteresCasillero(Imagen, Casillero)
